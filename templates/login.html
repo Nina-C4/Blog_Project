@@ -1,0 +1,34 @@
+{% extends '_base.html' %}
+{% from 'bootstrap5/form.html' import render_form %}
+<!-- Main Content-->
+{% block content %}
+<main class="mb-4">
+    <div class="container">
+        <div class="row">
+        <!-- Render Flash messages -->
+<!--            {% with messages = get_flashed_messages() %}-->
+<!--                {% if messages: %}-->
+<!--                    {% for message in messages: %}-->
+<!--                      <p class="flash">{{ message }}</p>-->
+<!--                    {% endfor %}-->
+<!--                {% endif %}-->
+<!--            {% endwith %}-->
+              {% with messages = get_flashed_messages(with_categories=true) %}
+                                {% if messages: %}
+                                    <div class="flash">
+                                        {% for category, message in messages %}
+                                            <div class="flash {{ category }}">
+                                                <p>{{ message|safe }}</p>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            {% endwith %}
+            <div class="col-lg-8 col-md-10 mx-auto">
+                <!-- Render LoginForm -->
+                {{ render_form(form, novalidate=True, button_map={"submit": "primary"}) }}
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}
