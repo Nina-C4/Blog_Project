@@ -221,18 +221,19 @@ def logout():
 
 @app.route('/')
 def home():
-    result = db.session.execute(db.select(BlogPost))
+    # result = db.session.execute(db.select(BlogPost))
     if not os.environ.get("LOCAL"):  # Check for Render.com environment
         # PostgreSQL query
-        results = db.session.execute(
+        result = db.session.execute(
             db.select(BlogPost).order_by(desc(func.to_date(BlogPost.date, 'Month DD, YYYY')))
         )
+        posts = result.scalars().all()
     else:
         # SQLite query
-        results = db.session.execute(
+        result = db.session.execute(
             db.select(BlogPost).order_by(func.strftime('%Y-%m-%d', func.replace(BlogPost.date, ',', '')).desc())
         )
-    posts = result.scalars().all()
+        posts = result.scalars().all()
     return render_template("index.html",
                            all_posts=posts,
                            current_user=current_user,
