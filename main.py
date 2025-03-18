@@ -12,7 +12,7 @@ from flask_gravatar import Gravatar
 from flask_login import UserMixin, LoginManager, login_user, current_user, logout_user
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship, DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import Integer, String, Text
+from sqlalchemy import Integer, String, Text, func, desc
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -222,6 +222,16 @@ def logout():
 @app.route('/')
 def home():
     result = db.session.execute(db.select(BlogPost))
+    if os.environ.get("RENDER_PLATFORM") == "true":  # Check for Render.com environment
+        # PostgreSQL query
+        results = db.session.execute(
+            db.select(BlogPost).order_by(desc(func.to_date(BlogPost.date, 'Month DD, YYYY')))
+        )
+    else:
+        # SQLite query
+        results = db.session.execute(
+            db.select(BlogPost).order_by(desc(func.strftime('%Y-%m-%d', BlogPost.date)))
+        )
     posts = result.scalars().all()
     return render_template("index.html",
                            all_posts=posts,
