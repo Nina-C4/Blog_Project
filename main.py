@@ -222,7 +222,7 @@ def logout():
 @app.route('/')
 def home():
     result = db.session.execute(db.select(BlogPost))
-    if os.environ.get("RENDER_PLATFORM") == "true":  # Check for Render.com environment
+    if not os.environ.get("LOCAL"):  # Check for Render.com environment
         # PostgreSQL query
         results = db.session.execute(
             db.select(BlogPost).order_by(desc(func.to_date(BlogPost.date, 'Month DD, YYYY')))
