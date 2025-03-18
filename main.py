@@ -230,7 +230,7 @@ def home():
     else:
         # SQLite query
         results = db.session.execute(
-            db.select(BlogPost).order_by(desc(func.strftime('%Y-%m-%d', BlogPost.date)))
+            db.select(BlogPost).order_by(func.strftime('%Y-%m-%d', func.replace(BlogPost.date, ',', '')).desc())
         )
     posts = result.scalars().all()
     return render_template("index.html",
