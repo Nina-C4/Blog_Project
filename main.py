@@ -338,7 +338,7 @@ def about():
     return render_template("about.html",
                            current_user=current_user,
                            title='About Me',
-                           subtitle='This is what I do.',
+                           subtitle='Welcome to the party!',
                            bg_image="about-bg.jpg"
                            )
 
