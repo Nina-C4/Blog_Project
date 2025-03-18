@@ -107,7 +107,7 @@ class User(UserMixin,db.Model):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    password: Mapped[str] = mapped_column(String(30), nullable=False)
+    password: Mapped[str] = mapped_column(String(250), nullable=False)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     # ! Relational databases: this acts like a list of BlogPost_objs attached to each User
     posts = relationship(argument="BlogPost", back_populates="author")
@@ -119,7 +119,7 @@ class BlogPost(db.Model):
     __tablename__ = "blog_posts"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, db.ForeignKey("users.id"))
-    title: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
     subtitle: Mapped[str] = mapped_column(String(150), nullable=False)
     date: Mapped[str] = mapped_column(String(30), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
@@ -136,13 +136,13 @@ class Comment(db.Model):
     user_id: Mapped[int] = mapped_column(Integer, db.ForeignKey("users.id"))
     post_id: Mapped[str] = mapped_column(Integer, db.ForeignKey("blog_posts.id"))
     text: Mapped[str] = mapped_column(Text, nullable=False)
-    date: Mapped[str] = mapped_column(String,nullable=False)
+    date: Mapped[str] = mapped_column(String(30),nullable=False)
 
     comment_author = relationship(argument="User", back_populates="comments")
     parent_post = relationship(argument="BlogPost", back_populates="comments")
 
 
-# create all table structures
+# # create all table structures
 with app.app_context():
     db.create_all()
 
