@@ -10869,3 +10869,6 @@ header.masthead .post-heading .meta a {
   font-size: 1.3rem;
   font-weight:400;
 }
+.highlighted {
+    background-color: #FBCEB1;
+}

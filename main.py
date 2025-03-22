@@ -21,6 +21,7 @@ import json
 import os
 from dotenv import load_dotenv
 import smtplib
+import re
 
 
 load_dotenv()
@@ -29,7 +30,8 @@ PASS = os.environ['PASS']
 G_URL = "smtp.gmail.com"
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ['FLASK_KEY']
+app.config['FLASK_KEY'] = os.environ['FLASK_KEY']
+app.config['SECRET_KEY'] = os.environ['SECRET_KEY']
 ckeditor = CKEditor(app)
 Bootstrap5(app)
 
@@ -88,6 +90,36 @@ def create_posts_from_json(_filename):
             db.session.add(new_post)
             db.session.commit()
 
+def find_phrase(text, query, max_length=250):
+    """Finds a phrase containing the query."""
+    match = re.search(re.escape(query), text, re.IGNORECASE)
+    if match:
+        start = match.start()
+        sentence_start = max(
+            text.rfind(". ", 0, start),
+            text.rfind("! ", 0, start),
+            text.rfind("? ", 0, start),
+            text.rfind("\n", 0, start),
+            0  # start of string
+        )
+        if sentence_start != 0:
+            start = sentence_start + 2  # skip delimiter
+            if text[start:start + 2].lower() == "p>":
+                start += 2  # Skip the "<p>" tag
+
+        end = min(len(text), start + max_length)
+        return text[start:end].strip() + "..."
+
+    return text[:max_length].strip() + "..."
+
+def highlight_query(text, query):
+    """Highlights the query in the text with orange color."""
+    return re.sub(re.escape(query),
+                  lambda m: f'<span class="highlighted">{m.group(0)}</span>',
+                  text,
+                  flags=re.IGNORECASE)
+
+app.jinja_env.filters['highlight_query'] = highlight_query
 
 # ----------------------------------------------------------------- #
 # Create database
@@ -147,10 +179,10 @@ with app.app_context():
     db.create_all()
 
 # create records in BlogPost.db and User.db
-# # comment below lines after the 1st run
+# comment below lines after the 1st run
 # if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-#     create_user()
-#     create_posts_from_json('blog_data')
+#     # create_user()
+#     # create_posts_from_json('blog_data')
 
 # ----------------------------------------------------------------- #
 
@@ -234,8 +266,20 @@ def home():
             db.select(BlogPost).order_by(func.strftime('%Y-%m-%d', func.replace(BlogPost.date, ',', '')).desc())
         )
         posts = result.scalars().all()
+    visible_posts = posts[:3]  # Initial 3 posts
+    all_posts_dicts = [
+        {
+            'id': post.id,
+            'title': post.title,
+            'subtitle': post.subtitle,
+            'author': {'name': post.author.name},  # Ensure author is a dictionary
+            'date': post.date
+        }
+        for post in posts
+    ]
     return render_template("index.html",
-                           all_posts=posts,
+                           all_posts=all_posts_dicts,
+                           visible_posts=visible_posts,
                            current_user=current_user,
                            title='Blog Project',
                            subtitle='A collection of random musings',
@@ -243,9 +287,51 @@ def home():
                            )
 
 
+@app.route('/search')
+def search():
+    query = request.args.get('query')  # Get the search query from the URL
+    results = []
+    if query:
+        posts = BlogPost.query.all()
+
+        for post in posts:
+            if re.search(re.escape(query), post.title, re.IGNORECASE):
+                results.append((post, highlight_query(post.title, query), None))
+            elif post.subtitle and re.search(re.escape(query), post.subtitle, re.IGNORECASE):
+                results.append((post, highlight_query(f"{post.subtitle}", query), None))
+            elif re.search(re.escape(query), post.body, re.IGNORECASE):
+                body_phrase = find_phrase(post.body, query)
+                results.append((post, highlight_query(f"{body_phrase}", query), None))
+
+            for comment in post.comments:
+                if re.search(re.escape(query), comment.text, re.IGNORECASE):
+                    comment_phrase = find_phrase(comment.text, query)
+                    results.append((post, highlight_query(f"{comment_phrase}", query), comment))
+
+    else:
+        results = []
+
+    return render_template('search_results.html',
+                           results=results,
+                           query=query,
+                           current_user=current_user,
+                           title='Blog Project',
+                           subtitle='A collection of random musings',
+                           bg_image="home-bg.jpg"
+                           )
+
 @app.route("/post/<int:post_id>", methods=['GET','POST'])
 def show_post(post_id):
     sel_post = db.get_or_404(BlogPost, post_id)
+    # pass the posts to js as dictionary
+    post_dict = {
+        'id': sel_post.id,
+        'title': sel_post.title,
+        'subtitle': sel_post.subtitle,
+        'author': {'name': sel_post.author.name},
+        'date': sel_post.date
+    }
+
     comment_form = CommentForm()
     if comment_form.validate_on_submit():
         if not current_user.is_authenticated:
@@ -260,13 +346,13 @@ def show_post(post_id):
         )
         db.session.add(new_comm)
         db.session.commit()
-        comment_form = CommentForm()
 
-        return redirect(url_for('show_post',post_id=sel_post.id))
+        return redirect(url_for('show_post',post_id=sel_post.id,post_dict=post_dict))
 
     return render_template("post.html",
                            current_user=current_user,
                            post=sel_post,
+                           post_dict=post_dict,
                            form=comment_form)
 
 
@@ -324,13 +410,26 @@ def edit_post(post_id):
                            )
 
 
-@app.route("/delete/<int:post_id>")
+@app.route("/delete-post/<int:post_id>", methods=["POST"])
 @admin_only
 def delete_post(post_id):
     post_to_delete = db.get_or_404(BlogPost, post_id)
-    db.session.delete(post_to_delete)
-    db.session.commit()
-    return redirect(url_for('home'))
+    secret_key = request.form.get("secretKey")
+
+    if secret_key == app.config['SECRET_KEY']:
+        try:
+            comments_to_delete = Comment.query.filter_by(post_id=post_id).all()
+            for comment in comments_to_delete:
+                db.session.delete(comment)
+            db.session.delete(post_to_delete)
+            db.session.commit()
+            return redirect(url_for('home'))
+        except Exception as e:
+            # Handle database errors (log, display message, etc.)
+            print(f"Database error: {e}")
+            abort(500)  # Internal Server Error
+    else:
+        abort(403)  # Forbidden (incorrect secret key)
 
 
 @app.route("/about")
@@ -378,4 +477,4 @@ def contact():
         )
 
 if __name__ == "__main__":
-    app.run(debug=False, host='localhost',port=3333)
+    app.run(debug=True, host='localhost',port=3333)
