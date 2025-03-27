@@ -175,3 +175,6 @@ cython_debug/
 
 # Do NOT track/commit blog_data.json
 blog_data.json
+
+# Do NOT track/commit c4_main.py
+c4_main.py

@@ -1,8 +1,3 @@
-# --------------------------------------------------------------------
-# Project Name: Blog Project
-# Description:
-#       Fully functional blog built with Python Flask, Bootstrap and PostgreSQL.
-# ----------------------------------------------------------------------------- #
 
 import datetime as dt
 from flask import Flask, abort, render_template, redirect, url_for, flash, request
@@ -17,7 +12,6 @@ from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from forms import NewPostForm, RegisterForm, LoginForm, CommentForm
-import json
 import os
 from dotenv import load_dotenv
 import smtplib
@@ -25,13 +19,14 @@ import re
 
 
 load_dotenv()
-MY_EMAIL = os.environ['EMAIL']
+APP_EMAIL = os.environ['APP_EMAIL']
 PASS = os.environ['PASS']
+ADMIN_EMAIL = os.environ['ADMIN_EMAIL']
 G_URL = "smtp.gmail.com"
 
 app = Flask(__name__)
-app.config['FLASK_KEY'] = os.environ['FLASK_KEY']
 app.config['SECRET_KEY'] = os.environ['SECRET_KEY']
+app.config['DEL_CODE'] = os.environ['DELETION_CODE']
 ckeditor = CKEditor(app)
 Bootstrap5(app)
 
@@ -51,8 +46,6 @@ login_manager.init_app(app)
 def load_user(user_id):
     return db.get_or_404(User, user_id)
 
-# py_deco for create, edit, delete routes
-# docu: https://flask.palletsprojects.com/en/stable/patterns/viewdecorators/
 def admin_only(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -60,35 +53,6 @@ def admin_only(f):
             return abort(403)
         return f(*args, **kwargs)
     return decorated_function
-
-def create_user():
-    with app.app_context():
-        new_user = User(
-            name='Nina',  # type: ignore[call-arg]
-            email='admin@email.com',  # type: ignore[call-arg]
-            password = generate_password_hash(password='123456', method='pbkdf2:sha256', salt_length=10) # type: ignore[call-arg]
-        )
-        db.session.add(new_user)
-        db.session.commit()
-
-def create_posts_from_json(_filename):
-    with app.app_context():
-        with open(f"{_filename}.json", "r", encoding="utf-8") as j_file:
-            a_list = json.load(j_file)
-
-        for post in a_list:
-            user = db.session.query(User).get(post['user_id'])
-
-            new_post = BlogPost(
-                author=user,
-                title=post['title'],
-                subtitle=post['subtitle'],
-                date=post['date'],
-                body=" ".join(post['body']),
-                img_url=post['img_url'],
-            )
-            db.session.add(new_post)
-            db.session.commit()
 
 def find_phrase(text, query, max_length=250):
     """Finds a phrase containing the query."""
@@ -126,6 +90,7 @@ app.jinja_env.filters['highlight_query'] = highlight_query
 class Base(DeclarativeBase):
     pass
 
+# Choose DMS: True -> SQLite, False -> PostgreSQL
 if os.environ.get("LOCAL") == "True":
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DB_URI", "sqlite:///blog_posts.db")
 else:
@@ -145,7 +110,6 @@ class User(UserMixin,db.Model):
     posts = relationship(argument="BlogPost", back_populates="author")
     comments = relationship(argument="Comment", back_populates="comment_author")
 
-# ! Relational databases: Create ForeignKey and reference to the User object
 # Child of User | Parent of Comment
 class BlogPost(db.Model):
     __tablename__ = "blog_posts"
@@ -174,20 +138,15 @@ class Comment(db.Model):
     parent_post = relationship(argument="BlogPost", back_populates="comments")
 
 
-# # create all table structures
+# create all table structures
 with app.app_context():
     db.create_all()
-
-# create records in BlogPost.db and User.db
-# comment below lines after the 1st run
-# if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-#     # create_user()
-#     # create_posts_from_json('blog_data')
 
 # ----------------------------------------------------------------- #
 
 @app.route('/register', methods=['GET','POST'])
 def register():
+    """Renders the Registration WTForm """
     form = RegisterForm()
     if form.validate_on_submit():
         email = form.email.data
@@ -219,6 +178,7 @@ def register():
 
 @app.route('/login',methods=['GET','POST'])
 def login():
+    """Renders the Login Form for user authentication."""
     form = LoginForm()
     if form.validate_on_submit():
         email = form.email.data
@@ -277,10 +237,15 @@ def home():
         }
         for post in posts
     ]
+    user_id = -1
+    if current_user.is_authenticated:
+        user_id = current_user.id
+
     return render_template("index.html",
                            all_posts=all_posts_dicts,
                            visible_posts=visible_posts,
                            current_user=current_user,
+                           user_id=user_id,
                            title='Blog Project',
                            subtitle='A collection of random musings',
                            bg_image="home-bg.jpg"
@@ -319,6 +284,7 @@ def search():
                            subtitle='A collection of random musings',
                            bg_image="home-bg.jpg"
                            )
+
 
 @app.route("/post/<int:post_id>", methods=['GET','POST'])
 def show_post(post_id):
@@ -414,9 +380,9 @@ def edit_post(post_id):
 @admin_only
 def delete_post(post_id):
     post_to_delete = db.get_or_404(BlogPost, post_id)
-    secret_key = request.form.get("secretKey")
+    del_code = request.form.get("delCode")
 
-    if secret_key == app.config['SECRET_KEY']:
+    if del_code == app.config['DEL_CODE']:
         try:
             comments_to_delete = Comment.query.filter_by(post_id=post_id).all()
             for comment in comments_to_delete:
@@ -464,8 +430,8 @@ def contact():
 
         with smtplib.SMTP(G_URL,587, timeout=120) as connection:
             connection.starttls()
-            connection.login(user=MY_EMAIL, password=PASS)
-            connection.sendmail(from_addr=MY_EMAIL, to_addrs="nina.patru.pt@gmail.com",
+            connection.login(user=APP_EMAIL, password=PASS)
+            connection.sendmail(from_addr=APP_EMAIL, to_addrs=ADMIN_EMAIL,
                                 msg=f"Subject: My Blog | New subscriber\n\n"
                                     f"{message}")
 
@@ -477,4 +443,4 @@ def contact():
         )
 
 if __name__ == "__main__":
-    app.run(debug=True, host='localhost',port=3333)
+    app.run(debug=True, host='localhost',port=5000)

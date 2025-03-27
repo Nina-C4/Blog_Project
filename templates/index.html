@@ -77,10 +77,14 @@
                               action="/delete-post/{{ post.id }}"
                               id="deleteForm{{ post.id }}"
                               style="display: none;">
-                            <input type="password" name="secretKey" placeholder="Secret Key">
-                            <button type="submit">Confirm Delete</button>
+                            <input type="password"
+                                   name="delCode"
+                                   style="font-size: 0.8em"
+                                   placeholder="  Deletion Code">
+                            <button type="submit"
+                                    class="btn btn-outline-danger btn-sm"
+                                    style="font-size: 0.8em">Confirm Delete</button>
                         </form>
-
 
                     </div>
                     <!-- Divider-->
@@ -111,6 +115,7 @@
 <script>
     let allPosts = {{ all_posts|tojson }};
     let visiblePostsInitialCount = {{ visible_posts|length }};
+    let currentUserId = {{ user_id }}
 </script>
 
 {% endblock %}

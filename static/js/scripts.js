@@ -36,13 +36,41 @@ document.addEventListener('DOMContentLoaded', function() {
         if (prevPostsButton) {
             const postContainer = document.getElementById('post-container');
             const loadCount = 6;
-            let visibleCount = visiblePostsInitialCount; // Get initial count from global var
+            let visibleCount = visiblePostsInitialCount;
+
+            function attachDeleteListeners() {
+                const deleteLinks = document.querySelectorAll('.delete-post');
+                deleteLinks.forEach(link => {
+                    link.addEventListener('click', function(event) {
+                        event.preventDefault();
+                        const postId = this.dataset.postId;
+                        const deleteForm = document.getElementById('deleteForm' + postId);
+                        if (deleteForm) {
+                            deleteForm.style.display = 'block';
+                            deleteForm.action = `/delete-post/${postId}`;
+                        }
+                    });
+                });
+            }
 
             prevPostsButton.addEventListener('click', function() {
                 let nextPosts = allPosts.slice(visibleCount, visibleCount + loadCount);
 
-                if (nextPosts.length > 0) { // Check if there are posts to load
+                if (nextPosts.length > 0) {
                     nextPosts.forEach(post => {
+                        let deleteLink = '';
+                        let deleteFormHtml = ''; // Initialize form html.
+
+                        if (currentUserId === 1) {
+                            deleteLink = `<a href="#" class="delete-post" data-post-id="${post.id}">✘</a>`;
+                            deleteFormHtml = `
+                                <form method="POST" action="/delete-post/${post.id}" id="deleteForm${post.id}" style="display: none;">
+                                    <input type="password" name="delCode" style="font-size: 0.8em" placeholder="  Deletion Code">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm" style="font-size: 0.8em">Confirm Delete</button>
+                                </form>
+                            `;
+                        }
+
                         const postDiv = document.createElement('div');
                         postDiv.classList.add('post-preview');
                         postDiv.innerHTML = `
@@ -52,21 +80,24 @@ document.addEventListener('DOMContentLoaded', function() {
                             </a>
                             <p class="post-meta">Posted by
                                 <a href="#">${post.author.name}</a> on ${post.date}
+                                ${deleteLink}
                             </p>
+                            ${deleteFormHtml}
                         `;
+
                         const hr = document.createElement('hr');
                         hr.classList.add('my-4');
                         postContainer.appendChild(postDiv);
                         postContainer.appendChild(hr);
                     });
-                    visibleCount += nextPosts.length; // use length of what was added.
+                    visibleCount += nextPosts.length;
                     if (visibleCount >= allPosts.length) {
                         prevPostsButton.style.display = 'none';
                     }
-                } else {
-                    prevPostsButton.style.display = 'none'; // No more posts to load
+                    attachDeleteListeners();
                 }
             });
+            attachDeleteListeners();
         }
 
 
@@ -102,3 +133,4 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
